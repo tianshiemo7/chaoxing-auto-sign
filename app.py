@@ -1,11 +1,27 @@
 #!/usr/bin/env python3
 """学习通签到 - PySide6 GUI"""
 import json, os, sys, time
-from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
-    QHBoxLayout, QLabel, QPushButton, QCheckBox, QScrollArea, QFrame,
-    QTextEdit, QLineEdit, QDialog)
-from PySide6.QtCore import Qt, QTimer, Signal, QThread
-from PySide6.QtGui import QFont, QTextCursor
+
+def _fail(msg):
+    """双重报错：控制台 + Windows弹窗"""
+    print(f"\n[启动失败] {msg}\n")
+    try:
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(0, msg,
+            "学习通签到 - 启动失败", 0x10)
+    except Exception:
+        pass
+    sys.exit(1)
+
+try:
+    from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
+        QHBoxLayout, QLabel, QPushButton, QCheckBox, QScrollArea, QFrame,
+        QTextEdit, QLineEdit, QDialog)
+    from PySide6.QtCore import Qt, QTimer, Signal, QThread
+    from PySide6.QtGui import QFont, QTextCursor
+except ImportError as e:
+    name = str(e).rsplit("'", 2)[1] if "'" in str(e) else "PySide6"
+    _fail(f"未找到 {name}\n\n请先安装依赖：\n  pip install -r requirements.txt\n\n或运行 start.bat 自动安装")
 
 sys.path.insert(0, os.path.dirname(__file__))
 from chaoxing_sign import ChaoXingSign
