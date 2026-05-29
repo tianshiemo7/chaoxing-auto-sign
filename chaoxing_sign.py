@@ -96,18 +96,35 @@ class ChaoXingSign:
         return self.session.get("https://mobilelearn.chaoxing.com/pptSign/stuSignajax",
                                 params=params).text
 
+    DEFAULT_LAT, DEFAULT_LNG = 36.1087, 120.4682
+
+    def _triangulate(self, si, start_lat, start_lng):
+        tri = Triangulator(
+            lambda lt, ln: self._do_sign(si, lat=lt, lng=ln),
+            self._is_success)
+        return tri.locate(start_lat, start_lng)
+
     def sign(self, si, lat="-1", lng="-1"):
         r = self._do_sign(si, lat=lat, lng=lng)
         if self._is_success(r):
             return {"status": "success"}
 
         dist = parse_distance(r)
-        if dist is not None:
-            tri = Triangulator(
-                lambda lt, ln: self._do_sign(si, lat=lt, lng=ln),
-                self._is_success)
-            ok, nl, ng = tri.locate(float(lat) if lat!="-1" else 36.1087,
-                                    float(lng) if lng!="-1" else 120.4682)
-            return {"status":"success","lat":nl,"lng":ng} if ok else {"status":"fail","raw":r}
+        if dist is None:
+            return {"status": "unknown", "raw": r}
 
-        return {"status":"unknown","raw":r}
+        use_lat = float(lat) if lat != "-1" else self.DEFAULT_LAT
+        use_lng = float(lng) if lng != "-1" else self.DEFAULT_LNG
+
+        # 第一次：从给定坐标（缓存/上次）出发三角定位
+        ok, nl, ng = self._triangulate(si, use_lat, use_lng)
+        if ok:
+            return {"status": "success", "lat": nl, "lng": ng}
+
+        # 缓存坐标太远定位失败 → 回退到默认坐标重试
+        if abs(use_lat - self.DEFAULT_LAT) > 0.001 or abs(use_lng - self.DEFAULT_LNG) > 0.001:
+            ok2, nl2, ng2 = self._triangulate(si, self.DEFAULT_LAT, self.DEFAULT_LNG)
+            if ok2:
+                return {"status": "success", "lat": nl2, "lng": ng2}
+
+        return {"status": "fail", "raw": r}
