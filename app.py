@@ -26,7 +26,10 @@ except ImportError as e:
 sys.path.insert(0, os.path.dirname(__file__))
 from chaoxing_sign import ChaoXingSign
 
-BASE = os.path.dirname(__file__)
+if getattr(sys, 'frozen', False):
+    BASE = os.path.dirname(sys.executable)
+else:
+    BASE = os.path.dirname(__file__)
 CFG = lambda f: os.path.join(BASE, f)
 
 def load(f, d=None):
