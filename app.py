@@ -39,8 +39,18 @@ def load(f, d=None):
     return d
 
 def save(f, data):
-    with open(f, "w", encoding="utf-8") as fh:
-        json.dump(data, fh, ensure_ascii=False, indent=2)
+    try:
+        with open(f, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, ensure_ascii=False, indent=2)
+    except Exception as e:
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(0,
+                f"保存文件失败：{f}\n\n{type(e).__name__}: {e}",
+                "学习通签到 - 写入错误", 0x10)
+        except Exception:
+            pass
+        raise
 
 # 共享样式
 STYLE_INPUT = "QLineEdit{border:2px solid #d0d0d0;border-radius:5px;padding:10px 14px;font-size:14px;background:#fff;color:#222;} QLineEdit:focus{border-color:#4a6cf7;}"
