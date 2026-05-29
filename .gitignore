@@ -6,7 +6,6 @@ whitelist.json
 locations.json
 sign_codes.json
 config.json
-*.spec
 build/
 dist/
 *.exe
