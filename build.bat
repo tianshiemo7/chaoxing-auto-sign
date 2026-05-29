@@ -54,15 +54,15 @@ echo.
 echo    [*] 正在编译 Debug 版...
 echo.
 python -c "
-import sys
 with open('ChaoxingSign.spec', 'r', encoding='utf-8') as f:
     spec = f.read()
-spec = spec.replace('name=\x27ChaoxingSign\x27', 'name=\x27ChaoxingSign_debug\x27')
+spec = spec.replace(\"name='ChaoxingSign'\", \"name='ChaoxingSign_debug'\")
 spec = spec.replace('console=False', 'console=True')
-with open('build/_debug.spec', 'w', encoding='utf-8') as f:
+with open('_debug.spec', 'w', encoding='utf-8') as f:
     f.write(spec)
 "
-pyinstaller build/_debug.spec --distpath dist/debug --workpath build/debug --clean --noconfirm
+pyinstaller _debug.spec --distpath dist/debug --workpath build/debug --clean --noconfirm
+del _debug.spec
 if %errorlevel% neq 0 (
     echo.
     echo    [X] Debug 版编译失败
@@ -74,8 +74,8 @@ echo.
 
 :: ── 打包 ZIP ──
 echo    [*] 正在打包 ZIP...
-powershell -Command "Compress-Archive -Path 'dist/release/ChaoxingSign/*' -DestinationPath 'dist/ChaoxingSign_v1.1_Release.zip' -Force" 2>nul
-powershell -Command "Compress-Archive -Path 'dist/debug/ChaoxingSign_debug/*' -DestinationPath 'dist/ChaoxingSign_v1.1_Debug.zip' -Force" 2>nul
+powershell -Command "Compress-Archive -Path 'dist/release/ChaoxingSign.exe' -DestinationPath 'dist/ChaoxingSign_Release.zip' -Force" 2>nul
+powershell -Command "Compress-Archive -Path 'dist/debug/ChaoxingSign_debug.exe' -DestinationPath 'dist/ChaoxingSign_Debug.zip' -Force" 2>nul
 echo    [√] ZIP 打包完成
 echo.
 
@@ -83,14 +83,14 @@ echo.
 echo    ═══════════════════════════════════════
 echo    构建完成！
 echo.
-echo    Release 版:  dist\release\ChaoxingSign\
-echo    Debug 版:    dist\debug\ChaoxingSign_debug\
-echo    ZIP 包:      dist\ChaoxingSign_v1.1_Release.zip
-echo                 dist\ChaoxingSign_v1.1_Debug.zip
+echo    Release 版:  dist\release\ChaoxingSign.exe
+echo    Debug 版:    dist\debug\ChaoxingSign_debug.exe
+echo    ZIP 包:      dist\ChaoxingSign_Release.zip
+echo                 dist\ChaoxingSign_Debug.zip
 echo.
 echo    上传 Release 请执行:
 echo      gh release create v1.1 --title "v1.1" --notes "更新说明" ^
-echo        dist/ChaoxingSign_v1.1_Release.zip dist/ChaoxingSign_v1.1_Debug.zip
+echo        dist/ChaoxingSign_Release.zip dist/ChaoxingSign_Debug.zip
 echo    ═══════════════════════════════════════
 echo.
 pause
