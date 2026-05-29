@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+courses.json
+whitelist.json
+locations.json
+sign_codes.json
+config.json
+*.spec
+build/
+dist/
+*.exe
