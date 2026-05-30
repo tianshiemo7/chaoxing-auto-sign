@@ -48,7 +48,7 @@ class ChaoXingSign:
             result = resp.json()
         except ValueError:
             raise Exception(f"登录返回异常: {resp.text[:200]}")
-        if not result.get("status"):
+        if not isinstance(result, dict) or not result.get("status"):
             raise Exception(f"登录失败: {result.get('msg2', '账号或密码错误')}")
         self.session.get(result.get("url", "http://i.chaoxing.com"), allow_redirects=True)
         for c in self.session.cookies:
@@ -59,11 +59,15 @@ class ChaoXingSign:
         resp = self.session.get(
             "https://mooc1-api.chaoxing.com/mycourse/backclazzdata?"
             + urlencode({"courseType":"1","courseFolderId":"0","query":"","superstarClass":"0"}))
+        data = resp.json()
+        if not isinstance(data, dict):
+            return []
         channels = []
-        for ch in resp.json().get("channelList", []):
-            cd = ch.get("content", {}).get("course", {}).get("data", [{}])[0]
+        for ch in data.get("channelList", []):
+            ct = ch.get("content") or {}
+            cd = (ct.get("course") or {}).get("data", [{}])[0]
             channels.append({
-                "courseId": cd.get("id",""), "clazzId": ch["content"].get("id",""),
+                "courseId": cd.get("id",""), "clazzId": ct.get("id",""),
                 "name": cd.get("name","未知课程"), "teacher": cd.get("teacherfactor",""),
             })
         return channels
@@ -73,17 +77,24 @@ class ChaoXingSign:
             f"https://mobilelearn.chaoxing.com/v2/apis/active/student/activelist?"
             f"fid=0&courseId={course['courseId']}&classId={course['clazzId']}"
             f"&showNotStartedActive=0")
+        data = resp.json()
+        # 会话过期或接口异常时可能返回 null
+        if not isinstance(data, dict):
+            return []
         now_ms = int(time.time() * 1000)
         signs = []
-        for a in resp.json().get("data",{}).get("activeList",[]):
-            try: et = int(a.get("endTime",0) or 0)
-            except (ValueError, TypeError): et = 0
-            if 0 < et < now_ms: continue
-            signs.append({"activeId":a["id"], "name":a.get("nameOne","签到"),
-                          "type":a.get("activeType"), "status":a.get("status"),
-                          "userStatus":a.get("userStatus",0),
-                          "courseId":course["courseId"], "clazzId":course["clazzId"],
-                          "endTime":et})
+        for a in (data.get("data") or {}).get("activeList", []):
+            try:
+                et = int(a.get("endTime", 0) or 0)
+            except (ValueError, TypeError):
+                et = 0
+            if 0 < et < now_ms:
+                continue
+            signs.append({"activeId": a["id"], "name": a.get("nameOne", "签到"),
+                          "type": a.get("activeType"), "status": a.get("status"),
+                          "userStatus": a.get("userStatus", 0),
+                          "courseId": course["courseId"], "clazzId": course["clazzId"],
+                          "endTime": et})
         return signs
 
     def _do_sign(self, si, lat="-1", lng="-1"):

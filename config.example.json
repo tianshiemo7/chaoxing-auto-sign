@@ -2,5 +2,8 @@
     "username": "",
     "password": "",
     "latitude": "36.1087",
-    "longitude": "120.4682"
+    "longitude": "120.4682",
+    "monitor_interval": 30,
+    "monitor_jitter": 40,
+    "night_mode": false
 }
