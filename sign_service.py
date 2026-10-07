@@ -23,12 +23,14 @@ class SignService:
         self._signer = None
 
     # ---- 登录 / 会话 ----
-    def login(self, username=None, password=None):
+    def login(self, username=None, password=None, address=None):
         if username is None:
             username, password = self._cfg.get_account()
         if not username or not password:
             raise ValueError("账号密码未配置")
-        self._signer = ChaoXingSign(username, password)
+        if address is None:
+            address = self._cfg.get_address()
+        self._signer = ChaoXingSign(username, password, address=address)
         self._signer.login()
         return True
 
@@ -53,19 +55,28 @@ class SignService:
             result.add_log("未登录，无法签到", "error")
             return result
 
-        dl, dln = self._cfg.get_coords_default()
+        dl, dln, address = self._cfg.get_signing_location()
+        self._signer.address = address
         loc_db = self._cfg.get_locations()
+        cache_changed = False
 
         for c in targets:
             if stop_check and stop_check():
                 break
             lk = f"{c['courseId']}_{c['clazzId']}"
-            sv = loc_db.get(lk, {})
-            lat = sv.get("lat", dl) if sv else dl
-            lng = sv.get("lng", dln) if sv else dln
-            if sv:
+            lat, lng = dl, dln
+            cached_location = loc_db.get(lk, {})
+            if self._is_location_cache_current(cached_location, dl, dln, address):
+                lat = float(cached_location["lat"])
+                lng = float(cached_location["lng"])
                 result.add_log(
-                    f"[{c['name']}] 坐标({lat:.4f},{lng:.4f})", "info")
+                    f"[{c['name']}] 使用缓存坐标({lat:.4f},{lng:.4f})", "info")
+            else:
+                if cached_location:
+                    loc_db.pop(lk, None)
+                    cache_changed = True
+                result.add_log(
+                    f"[{c['name']}] 使用配置起点({float(lat):.4f},{float(lng):.4f})", "info")
 
             try:
                 signs = self._signer.get_active_signs(c) or []
@@ -83,6 +94,9 @@ class SignService:
                         if nl is not None and ng is not None:
                             loc_db[lk] = {
                                 "lat": nl, "lng": ng,
+                                "source_latitude": dl,
+                                "source_longitude": dln,
+                                "source_address": address,
                                 "updated_at": time.strftime("%Y-%m-%d %H:%M:%S")}
                             result.locations_updated = True
                             result.add_log(
@@ -95,9 +109,24 @@ class SignService:
                 result.add_log(f"[{c['name']}] 出错:{e}", "error")
                 result.add_log(traceback.format_exc(), "error")
 
-        if result.locations_updated:
+        if result.locations_updated or cache_changed:
             self._cfg.save_locations(loc_db)
         return result
+
+    @staticmethod
+    def _is_location_cache_current(location, latitude, longitude, address):
+        """仅复用由当前配置起点和地址生成的定位缓存。"""
+        try:
+            float(location["lat"])
+            float(location["lng"])
+        except (KeyError, TypeError, ValueError):
+            return False
+        return (
+            isinstance(location, dict)
+            and location.get("source_latitude") == latitude
+            and location.get("source_longitude") == longitude
+            and location.get("source_address") == address
+        )
 
     # ---- 监控间隔计算 ----
     def calc_wait(self):

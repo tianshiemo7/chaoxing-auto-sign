@@ -7,13 +7,12 @@ from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad
 from triangulate import Triangulator, parse_distance
 
-BASE_ADDRESS = "青岛科技大学"
 USER_AGENT = ("Mozilla/5.0 (Linux; Android 12; Pixel 6) "
               "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
 AES_KEY = "u2oh6Vu^HWe4_AES"
 
 class ChaoXingSign:
-    def __init__(self, username, password):
+    def __init__(self, username, password, address=""):
         self.session = requests.Session()
         self.session.headers.update({
             "User-Agent": USER_AGENT,
@@ -22,6 +21,7 @@ class ChaoXingSign:
         })
         self.username = username
         self.password = password
+        self.address = address
         self.uid = ""
         self.name = "同学"
 
@@ -35,6 +35,15 @@ class ChaoXingSign:
     def _is_success(text):
         return "success" in text.lower() or "已签到" in text or "簽到" in text
 
+    @staticmethod
+    def _json_or_error(response, operation):
+        try:
+            return response.json()
+        except ValueError as error:
+            content_type = response.headers.get("Content-Type", "未知")
+            raise RuntimeError(
+                f"{operation}接口返回非 JSON（HTTP {response.status_code}，{content_type}）") from error
+
     def login(self):
         self.session.get(
             "https://passport2.chaoxing.com/mlogin?fid=&newversion=true&refer=http://i.chaoxing.com")
@@ -44,10 +53,7 @@ class ChaoXingSign:
             "uname": self._encrypt_aes(self.username),
             "password": self._encrypt_aes(self.password),
         }, allow_redirects=True)
-        try:
-            result = resp.json()
-        except ValueError:
-            raise Exception(f"登录返回异常: {resp.text[:200]}")
+        result = self._json_or_error(resp, "登录")
         if not isinstance(result, dict) or not result.get("status"):
             raise Exception(f"登录失败: {result.get('msg2', '账号或密码错误')}")
         self.session.get(result.get("url", "http://i.chaoxing.com"), allow_redirects=True)
@@ -59,7 +65,7 @@ class ChaoXingSign:
         resp = self.session.get(
             "https://mooc1-api.chaoxing.com/mycourse/backclazzdata?"
             + urlencode({"courseType":"1","courseFolderId":"0","query":"","superstarClass":"0"}))
-        data = resp.json()
+        data = self._json_or_error(resp, "课程")
         if not isinstance(data, dict):
             return []
         channels = []
@@ -77,7 +83,7 @@ class ChaoXingSign:
             f"https://mobilelearn.chaoxing.com/v2/apis/active/student/activelist?"
             f"fid=0&courseId={course['courseId']}&classId={course['clazzId']}"
             f"&showNotStartedActive=0")
-        data = resp.json()
+        data = self._json_or_error(resp, "签到活动")
         # 会话过期或接口异常时可能返回 null
         if not isinstance(data, dict):
             return []
@@ -103,11 +109,9 @@ class ChaoXingSign:
             f"activeId={si['activeId']}&code=&uid={self.uid}")
         params = {"activeId":si["activeId"], "uid":self.uid, "clientip":"",
                   "latitude":lat, "longitude":lng, "appType":"15", "ifTiJiao":"1",
-                  "address": BASE_ADDRESS}
+                  "address": self.address}
         return self.session.get("https://mobilelearn.chaoxing.com/pptSign/stuSignajax",
                                 params=params).text
-
-    DEFAULT_LAT, DEFAULT_LNG = 36.1087, 120.4682
 
     def _triangulate(self, si, start_lat, start_lng):
         tri = Triangulator(
@@ -116,6 +120,8 @@ class ChaoXingSign:
         return tri.locate(start_lat, start_lng)
 
     def sign(self, si, lat="-1", lng="-1"):
+        if lat == "-1" or lng == "-1":
+            return {"status": "invalid_location", "raw": "缺少签到经纬度"}
         r = self._do_sign(si, lat=lat, lng=lng)
         if self._is_success(r):
             return {"status": "success"}
@@ -124,18 +130,11 @@ class ChaoXingSign:
         if dist is None:
             return {"status": "unknown", "raw": r}
 
-        use_lat = float(lat) if lat != "-1" else self.DEFAULT_LAT
-        use_lng = float(lng) if lng != "-1" else self.DEFAULT_LNG
+        use_lat, use_lng = float(lat), float(lng)
 
-        # 第一次：从给定坐标（缓存/上次）出发三角定位
+        # 从配置起点或同一配置生成的课程缓存开始三角定位。
         ok, nl, ng = self._triangulate(si, use_lat, use_lng)
         if ok:
             return {"status": "success", "lat": nl, "lng": ng}
-
-        # 缓存坐标太远定位失败 → 回退到默认坐标重试
-        if abs(use_lat - self.DEFAULT_LAT) > 0.001 or abs(use_lng - self.DEFAULT_LNG) > 0.001:
-            ok2, nl2, ng2 = self._triangulate(si, self.DEFAULT_LAT, self.DEFAULT_LNG)
-            if ok2:
-                return {"status": "success", "lat": nl2, "lng": ng2}
 
         return {"status": "fail", "raw": r}

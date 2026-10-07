@@ -44,10 +44,16 @@ class ConfigManager:
 
     # ---- 读 ----
     def get_config(self):
-        return self._load("config.json", {
-            "latitude": "36.1087", "longitude": "120.4682",
+        self._cache.pop("config.json", None)
+        config = self._load("config.json", {
+            "latitude": "", "longitude": "",
+            "address": "",
             "monitor_interval": 30, "monitor_jitter": 40,
             "night_mode": False})
+        if "address" not in config:
+            config["address"] = ""
+            self._save("config.json", config)
+        return config
 
     def get_courses(self):
         return self._load("courses.json", [])
@@ -63,8 +69,30 @@ class ConfigManager:
         return cfg.get("username", ""), cfg.get("password", "")
 
     def get_coords_default(self):
+        latitude, longitude, _ = self.get_signing_location()
+        return latitude, longitude
+
+    def get_signing_location(self):
+        """返回当前配置的定位起点与地址，并校验其格式。"""
         cfg = self.get_config()
-        return cfg.get("latitude", "36.1087"), cfg.get("longitude", "120.4682")
+        latitude = str(cfg.get("latitude", "")).strip()
+        longitude = str(cfg.get("longitude", "")).strip()
+        address = str(cfg.get("address", "")).strip()
+        if not latitude or not longitude:
+            raise ValueError("签到经纬度未配置，请在 config.json 中填写 latitude 和 longitude")
+        if not address:
+            raise ValueError("签到地址未配置，请在 config.json 中填写 address")
+        try:
+            latitude_value, longitude_value = float(latitude), float(longitude)
+        except ValueError as error:
+            raise ValueError("签到经纬度必须是数字") from error
+        if not -89.999 < latitude_value < 89.999 or not -180 <= longitude_value <= 180:
+            raise ValueError("纬度范围为 -89.999 至 89.999，经度范围为 -180 至 180")
+        return latitude, longitude, address
+
+    def get_address(self):
+        _, _, address = self.get_signing_location()
+        return address
 
     def get_monitor_settings(self):
         cfg = self.get_config()

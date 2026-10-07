@@ -41,14 +41,14 @@ class LoginDialog(QDialog):
         super().__init__(parent)
         self._cfg = config
         self._svc = service
-        self.setWindowTitle("登录学习通"); self.setFixedSize(380, 270)
+        self.setWindowTitle("登录学习通"); self.setFixedSize(380, 450)
         self.setStyleSheet("QDialog{background:#fff}")
         self.result_user = None
         ly = QVBoxLayout(self); ly.setSpacing(10); ly.setContentsMargins(28,20,28,20)
 
         t = QLabel("学习通登录"); t.setAlignment(Qt.AlignCenter)
         t.setStyleSheet("font-size:17px;font-weight:bold;color:#1a1a2e;"); ly.addWidget(t)
-        s = QLabel("首次使用需登录获取课程，数据缓存本地"); s.setAlignment(Qt.AlignCenter)
+        s = QLabel("首次使用请填写登录与签到默认信息，数据仅保存到本机"); s.setAlignment(Qt.AlignCenter)
         s.setStyleSheet("font-size:11px;color:#999;"); ly.addWidget(s); ly.addSpacing(6)
 
         self.user = QLineEdit(); self.user.setPlaceholderText("手机号")
@@ -56,7 +56,20 @@ class LoginDialog(QDialog):
 
         self.pwd = QLineEdit(); self.pwd.setPlaceholderText("密码")
         self.pwd.setEchoMode(QLineEdit.Password); self.pwd.setStyleSheet(STYLE_INPUT)
-        self.pwd.returnPressed.connect(self._go); ly.addWidget(self.pwd)
+        ly.addWidget(self.pwd)
+
+        cfg = self._cfg.get_config()
+        self.lat = QLineEdit(); self.lat.setPlaceholderText("纬度，例如 34.2500")
+        self.lat.setStyleSheet(STYLE_INPUT); self.lat.setText(str(cfg.get("latitude", "")))
+        ly.addWidget(self.lat)
+
+        self.lng = QLineEdit(); self.lng.setPlaceholderText("经度，例如 108.9500")
+        self.lng.setStyleSheet(STYLE_INPUT); self.lng.setText(str(cfg.get("longitude", "")))
+        ly.addWidget(self.lng)
+
+        self.address = QLineEdit(); self.address.setPlaceholderText("地址或学校名称")
+        self.address.setStyleSheet(STYLE_INPUT); self.address.setText(str(cfg.get("address", "")))
+        self.address.returnPressed.connect(self._go); ly.addWidget(self.address)
 
         self.err = QLabel(""); self.err.setStyleSheet("color:#e74c3c;font-size:11px;")
         self.err.setAlignment(Qt.AlignCenter); ly.addWidget(self.err)
@@ -67,18 +80,32 @@ class LoginDialog(QDialog):
 
     def _go(self):
         u = self.user.text().strip(); p = self.pwd.text().strip()
+        lat = self.lat.text().strip(); lng = self.lng.text().strip()
+        address = self.address.text().strip()
         if not u or not p: self.err.setText("账号密码不能为空"); return
+        if not lat or not lng or not address:
+            self.err.setText("纬度、经度和地址不能为空"); return
+        try:
+            latitude, longitude = float(lat), float(lng)
+        except ValueError:
+            self.err.setText("纬度和经度必须是数字"); return
+        if not -89.999 < latitude < 89.999 or not -180 <= longitude <= 180:
+            self.err.setText("纬度范围为 -89.999 至 89.999，经度范围为 -180 至 180"); return
         self.btn.setText("登录中..."); self.btn.setEnabled(False); self.err.setText("")
         QApplication.processEvents()
         try:
-            self._svc.login(u, p)
+            self._svc.login(u, p, address=address)
             courses = self._svc.fetch_courses()
             cl = [{"courseId":c["courseId"],"clazzId":c["clazzId"],
                    "name":c["name"],"teacher":c["teacher"]} for c in courses]
             self._cfg.save_courses(cl)
             self._cfg.save_whitelist(
                 [f"{c['courseId']}_{c['clazzId']}" for c in cl])
-            self._cfg.save_credentials(u, p)
+            self._cfg.save_config({
+                "username": u, "password": p,
+                "latitude": lat, "longitude": lng,
+                "address": address,
+            })
             self.result_user = u; self.accept()
         except Exception as e:
             self.err.setText(str(e)); self.btn.setText("登录并获取课程"); self.btn.setEnabled(True)

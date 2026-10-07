@@ -21,7 +21,7 @@ echo    [*] 检查 PyInstaller...
 python -c "import PyInstaller" >nul 2>&1
 if %errorlevel% neq 0 (
     echo    [!] 正在安装 PyInstaller...
-    pip install pyinstaller -i https://pypi.tuna.tsinghua.edu.cn/simple
+    python -m pip install pyinstaller -i https://pypi.tuna.tsinghua.edu.cn/simple
     if %errorlevel% neq 0 (
         echo    [X] 安装失败
         pause & exit /b 1
@@ -40,7 +40,7 @@ echo.
 :: ── 编译 Release 版（无控制台） ──
 echo    [*] 正在编译 Release 版...
 echo.
-pyinstaller ChaoxingSign.spec --distpath dist/release --workpath build/release --clean --noconfirm
+python -m PyInstaller ChaoxingSign.spec --distpath dist/release --workpath build/release --clean --noconfirm
 if %errorlevel% neq 0 (
     echo.
     echo    [X] Release 版编译失败
@@ -61,7 +61,7 @@ spec = spec.replace('console=False', 'console=True')
 with open('_debug.spec', 'w', encoding='utf-8') as f:
     f.write(spec)
 "
-pyinstaller _debug.spec --distpath dist/debug --workpath build/debug --clean --noconfirm
+python -m PyInstaller _debug.spec --distpath dist/debug --workpath build/debug --clean --noconfirm
 del _debug.spec
 if %errorlevel% neq 0 (
     echo.
